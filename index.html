@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Doodle Recognizer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #eee8da;
+    --paper-line: #c3d2e0;
+    --ink: #232320;
+    --ink-soft: #5b5850;
+    --marker: #1d4ed8;
+    --marker-soft: #dbe6fb;
+    --flag: #d62828;
+    --pencil: #f2b134;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; min-height: 100vh; }
+
+  body {
+    background:
+      linear-gradient(var(--paper-line) 1px, transparent 1px) 0 0 / 100% 28px,
+      linear-gradient(90deg, var(--paper-line) 1px, transparent 1px) 0 0 / 28px 100%,
+      var(--paper);
+    background-blend-mode: multiply, multiply, normal;
+    font-family: "Space Grotesk", Arial, sans-serif;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 18px;
+  }
+
+  .sheet {
+    position: relative;
+    width: 100%;
+    max-width: 920px;
+    background: #fbf9f3;
+    border: 2px solid var(--ink);
+    border-radius: 3px 14px 4px 16px / 14px 3px 18px 4px;
+    box-shadow: 6px 6px 0 rgba(35,35,32,0.85), 0 22px 40px -20px rgba(35,35,32,0.4);
+    padding: 30px clamp(20px, 5vw, 44px) 36px;
+  }
+
+  .fold {
+    position: absolute; top: -1px; right: -1px; width: 46px; height: 46px;
+    background: linear-gradient(135deg, transparent 49.5%, var(--paper) 50%);
+    border-left: 2px solid var(--ink); border-bottom: 2px solid var(--ink);
+    border-radius: 0 12px 0 22px;
+  }
+
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+
+  h1 {
+    font-family: "Caveat", cursive; font-weight: 700; font-size: 2.6rem; line-height: 1;
+    margin: 0; color: var(--marker); transform: rotate(-1.5deg);
+  }
+
+  .sub { color: var(--ink-soft); font-size: 0.92rem; margin: 6px 0 18px; }
+
+  .categories-wrap { margin-bottom: 22px; }
+  .categories-label { font-size: 0.72rem; color: var(--ink-soft); margin: 0 0 6px; }
+  .categories { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 0.78rem; padding: 3px 10px; border: 1.5px solid var(--ink);
+    border-radius: 999px 999px 3px 999px; background: #fff; color: var(--ink); white-space: nowrap;
+  }
+
+  .quick-label {
+    margin: 4px 0 22px;
+    padding: 14px 18px;
+    border: 2px solid var(--ink);
+    border-radius: 6px 16px 6px 16px;
+    background: var(--marker-soft);
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .quick-label .word {
+    font-family: "Caveat", cursive;
+    font-weight: 700;
+    font-size: 2.6rem;
+    line-height: 1;
+    color: var(--marker);
+    text-transform: capitalize;
+  }
+  .quick-label .pct {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+  .quick-label.placeholder-state .word {
+    font-size: 1.05rem;
+    font-family: "Space Grotesk", Arial, sans-serif;
+    font-weight: 500;
+    color: var(--ink-soft);
+    text-transform: none;
+  }
+
+  .canvases-row {
+    display: grid;
+    grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+  }
+
+  @media (max-width: 700px) {
+    .canvases-row { grid-template-columns: 1fr; }
+  }
+
+  .col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+  .col-label { align-self: flex-start; font-size: 0.78rem; color: var(--ink-soft); margin: 0; }
+
+  canvas.doodle {
+    width: 100%; max-width: 300px; aspect-ratio: 1 / 1;
+    background:
+      linear-gradient(#e7edf5 1px, transparent 1px) 0 0 / 20px 20px,
+      linear-gradient(90deg, #e7edf5 1px, transparent 1px) 0 0 / 20px 20px,
+      #ffffff;
+    border: 2px solid var(--ink); border-radius: 6px 16px 6px 16px;
+    touch-action: none; cursor: crosshair;
+  }
+
+  canvas.pinboard {
+    width: 100%; aspect-ratio: 4 / 3;
+    background:
+      repeating-linear-gradient(0deg, #ded3b8 0 2px, #e7dcc2 2px 34px);
+    border: 2px solid var(--ink); border-radius: 6px 16px 6px 16px;
+    touch-action: none; cursor: grab;
+  }
+  canvas.pinboard.dragging { cursor: grabbing; }
+
+  .buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+  button {
+    font-family: inherit; border: 2px solid var(--ink); border-radius: 8px 3px 8px 3px;
+    padding: 9px 18px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+    background: #fff; color: var(--ink); box-shadow: 3px 3px 0 rgba(35,35,32,0.85);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(35,35,32,0.85); }
+  .primary { background: var(--marker); color: #fff; }
+  .primary:active { background: #1a41b8; }
+  .danger { border-color: var(--flag); color: var(--flag); }
+
+  .hint { font-size: 0.75rem; color: var(--ink-soft); text-align: center; max-width: 260px; }
+
+  .result-panel {
+    margin-top: 28px; padding-top: 20px; border-top: 2px dashed #b9c6d3; min-height: 60px;
+  }
+  .placeholder { color: var(--ink-soft); font-size: 0.92rem; }
+  .label-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .label { font-family: "Caveat", cursive; font-size: 2.2rem; font-weight: 700; color: var(--flag); text-transform: capitalize; line-height: 1; }
+  .confidence-tag { font-size: 0.82rem; color: var(--ink-soft); border: 1.5px solid var(--ink-soft); border-radius: 999px; padding: 2px 10px; }
+  .top5 { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; max-width: 420px; }
+  .top5-row { display: grid; grid-template-columns: 80px 1fr 46px; align-items: center; gap: 10px; }
+  .top5-row .name { font-size: 0.85rem; text-transform: capitalize; }
+  .bar-track { height: 10px; background: #eee3d0; border: 1.5px solid var(--ink); border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--pencil); border-right: 1.5px solid var(--ink); }
+  .top5-row:first-child .bar-fill { background: var(--marker); }
+  .top5-row .pct { font-size: 0.78rem; color: var(--ink-soft); text-align: right; }
+  .error-text { color: var(--flag); font-size: 0.9rem; }
+  .status-text { font-size: 0.78rem; color: var(--ink-soft); margin-top: 6px; min-height: 16px; }
+
+  footer {
+    margin-top: 30px; padding-top: 16px; border-top: 1.5px dashed #b9c6d3;
+    font-size: 0.78rem; color: var(--ink-soft); text-align: center; line-height: 1.6;
+  }
+  footer a { color: var(--marker); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="fold"></div>
+
+    <header><h1>Doodle Recognizer</h1></header>
+    <p class="sub">Sketch something on the left. Once it's recognized, a real photo of it gets pinned on the right — drag it around, and it stays there while you keep drawing.</p>
+
+    <div class="categories-wrap">
+      <p class="categories-label">the model only knows these</p>
+      <div class="categories" id="categoriesLine"><span class="chip">loading…</span></div>
+    </div>
+
+    <div class="quick-label placeholder-state" id="quickLabel">
+      <span class="word">Draw something, then hit Predict — your answer shows here.</span>
+    </div>
+
+    <div class="canvases-row">
+      <div class="col">
+        <p class="col-label">your sketch</p>
+        <canvas class="doodle" id="board" width="280" height="280"></canvas>
+        <div class="buttons">
+          <button class="secondary" onclick="clearBoard()">Clear sketch</button>
+          <button class="primary" onclick="predict()">Predict</button>
+        </div>
+      </div>
+
+      <div class="col">
+        <p class="col-label">pinboard — real photos of what you've drawn</p>
+        <canvas class="pinboard" id="pinboard" width="560" height="420"></canvas>
+        <div class="buttons">
+          <button class="danger" onclick="clearPinboard()">Clear pinboard</button>
+        </div>
+        <p class="hint">Drag a photo to move it. Double-click a photo to remove just that one.</p>
+        <p class="status-text" id="pinStatus"></p>
+      </div>
+    </div>
+
+    <div class="result-panel" id="result">
+      <p class="placeholder">Your top guess and confidence will show up here.</p>
+    </div>
+
+    <footer>
+      Made by Kumar Harsh<br>
+      <a href="mailto:kh949118@gmail.com">kh949118@gmail.com</a> · 9279157296
+    </footer>
+  </div>
+
+<script>
+  // Change this to your deployed backend URL once you push this project.
+  const BACKEND_URL = "http://localhost:8000";
+
+  /* ---------- doodle canvas (unchanged drawing logic) ---------- */
+  const canvas = document.getElementById("board");
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.lineWidth = 10;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "black";
+
+  let drawing = false;
+
+  function pos(e, targetCanvas) {
+    const rect = targetCanvas.getBoundingClientRect();
+    const point = e.touches ? e.touches[0] : e;
+    const scaleX = targetCanvas.width / rect.width;
+    const scaleY = targetCanvas.height / rect.height;
+    return { x: (point.clientX - rect.left) * scaleX, y: (point.clientY - rect.top) * scaleY };
+  }
+
+  function start(e) {
+    drawing = true;
+    const p = pos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    e.preventDefault();
+  }
+  function move(e) {
+    if (!drawing) return;
+    const p = pos(e, canvas);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    e.preventDefault();
+  }
+  function end() { drawing = false; }
+
+  canvas.addEventListener("mousedown", start);
+  canvas.addEventListener("mousemove", move);
+  canvas.addEventListener("mouseup", end);
+  canvas.addEventListener("mouseleave", end);
+  canvas.addEventListener("touchstart", start);
+  canvas.addEventListener("touchmove", move);
+  canvas.addEventListener("touchend", end);
+
+  function clearBoard() {
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    document.getElementById("result").innerHTML =
+      '<p class="placeholder">Your top guess and confidence will show up here.</p>';
+    const quickLabel = document.getElementById("quickLabel");
+    quickLabel.classList.add("placeholder-state");
+    quickLabel.innerHTML = '<span class="word">Draw something, then hit Predict — your answer shows here.</span>';
+  }
+
+  /* ---------- pinboard canvas: persistent, draggable real photos ---------- */
+  const pin = document.getElementById("pinboard");
+  const pctx = pin.getContext("2d");
+  const pinStatus = document.getElementById("pinStatus");
+
+  // Each item: { img, label, x, y, w, h }  (x,y = top-left corner, in pinboard's own coordinate space)
+  let pinItems = [];
+  let dragTarget = null;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  function drawPinboard() {
+    pctx.clearRect(0, 0, pin.width, pin.height);
+    for (const item of pinItems) {
+      // soft shadow to feel like a placed photo
+      pctx.save();
+      pctx.shadowColor = "rgba(35,35,32,0.35)";
+      pctx.shadowBlur = 10;
+      pctx.shadowOffsetY = 4;
+      pctx.drawImage(item.img, item.x, item.y, item.w, item.h);
+      pctx.restore();
+      // thin ink border around each photo
+      pctx.strokeStyle = "#232320";
+      pctx.lineWidth = 2;
+      pctx.strokeRect(item.x, item.y, item.w, item.h);
+      // little "pin" dot at the top
+      pctx.beginPath();
+      pctx.arc(item.x + item.w / 2, item.y, 5, 0, Math.PI * 2);
+      pctx.fillStyle = "#d62828";
+      pctx.fill();
+    }
+  }
+
+  function findItemAt(x, y) {
+    // topmost (last drawn) first
+    for (let i = pinItems.length - 1; i >= 0; i--) {
+      const it = pinItems[i];
+      if (x >= it.x && x <= it.x + it.w && y >= it.y && y <= it.y + it.h) return it;
+    }
+    return null;
+  }
+
+  pin.addEventListener("mousedown", (e) => {
+    const p = pos(e, pin);
+    const hit = findItemAt(p.x, p.y);
+    if (hit) {
+      dragTarget = hit;
+      dragOffsetX = p.x - hit.x;
+      dragOffsetY = p.y - hit.y;
+      pin.classList.add("dragging");
+    }
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragTarget) return;
+    const p = pos(e, pin);
+    dragTarget.x = p.x - dragOffsetX;
+    dragTarget.y = p.y - dragOffsetY;
+    drawPinboard();
+  });
+  window.addEventListener("mouseup", () => {
+    dragTarget = null;
+    pin.classList.remove("dragging");
+  });
+
+  pin.addEventListener("dblclick", (e) => {
+    const p = pos(e, pin);
+    const hit = findItemAt(p.x, p.y);
+    if (!hit) return;
+    const ok = confirm(`Remove this "${hit.label}" photo from the pinboard?`);
+    if (ok) {
+      pinItems = pinItems.filter(it => it !== hit);
+      drawPinboard();
+    }
+  });
+
+  function clearPinboard() {
+    if (pinItems.length === 0) return;
+    const ok = confirm("Remove every photo from the pinboard?");
+    if (ok) {
+      pinItems = [];
+      drawPinboard();
+    }
+  }
+
+  // cascade new photos so they don't stack exactly on top of each other
+  let placeCount = 0;
+  function nextSpot(w, h) {
+    const cols = Math.max(1, Math.floor((pin.width - 20) / (w + 16)));
+    const col = placeCount % cols;
+    const row = Math.floor(placeCount / cols) % 4;
+    placeCount++;
+    return {
+      x: 14 + col * (w + 16) + (Math.random() * 10 - 5),
+      y: 14 + row * (h + 16) + (Math.random() * 10 - 5),
+    };
+  }
+
+  // Category name -> local filename in /static/real_images/, e.g. "ice cream" -> "ice_cream.jpg"
+  function filenameForLabel(label) {
+    return label.trim().toLowerCase().replace(/\s+/g, "_") + ".jpg";
+  }
+
+  function addRealPhotoToPinboard(label) {
+    const filename = filenameForLabel(label);
+    const img = new Image();
+    img.onload = () => {
+      const w = 150, h = 150;
+      const spot = nextSpot(w, h);
+      pinItems.push({ img, label, x: spot.x, y: spot.y, w, h });
+      drawPinboard();
+      pinStatus.textContent = "";
+    };
+    img.onerror = () => {
+      pinStatus.textContent = `Missing file: static/real_images/${filename} — add it to your backend folder.`;
+    };
+    img.src = `${BACKEND_URL}/static/real_images/${filename}`;
+  }
+
+  /* ---------- categories + predict ---------- */
+  async function loadCategories() {
+    const wrap = document.getElementById("categoriesLine");
+    try {
+      const response = await fetch(`${BACKEND_URL}/classes`);
+      const data = await response.json();
+      wrap.innerHTML = data.classes.map(c => `<span class="chip">${c}</span>`).join("");
+    } catch (err) {
+      wrap.innerHTML = '<span class="chip" style="border-color:var(--flag); color:var(--flag);">Could not reach backend — check BACKEND_URL</span>';
+    }
+  }
+  loadCategories();
+
+  async function predict() {
+    const dataUrl = canvas.toDataURL("image/png");
+    const resultEl = document.getElementById("result");
+    const quickLabel = document.getElementById("quickLabel");
+    resultEl.innerHTML = '<p class="placeholder">Predicting…</p>';
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/predict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Prediction failed");
+
+      quickLabel.classList.remove("placeholder-state");
+      quickLabel.innerHTML = `
+        <span class="word">${data.predicted_label}</span>
+        <span class="pct">${(data.confidence * 100).toFixed(1)}% sure</span>
+      `;
+
+      const top5Html = data.top5.map(item => `
+        <div class="top5-row">
+          <span class="name">${item.label}</span>
+          <span class="bar-track"><span class="bar-fill" style="width:${(item.confidence*100).toFixed(0)}%"></span></span>
+          <span class="pct">${(item.confidence * 100).toFixed(1)}%</span>
+        </div>
+      `).join("");
+
+      resultEl.innerHTML = `
+        <div class="label-row">
+          <span class="label">${data.predicted_label}</span>
+          <span class="confidence-tag">${(data.confidence * 100).toFixed(1)}% sure</span>
+        </div>
+        <div class="top5">${top5Html}</div>
+      `;
+
+      // Pin a real photo of the recognized object — existing pinned photos are untouched.
+      addRealPhotoToPinboard(data.predicted_label);
+    } catch (err) {
+      resultEl.innerHTML = `<p class="error-text">${err.message}</p>`;
+      quickLabel.classList.add("placeholder-state");
+      quickLabel.innerHTML = `<span class="word">${err.message}</span>`;
+    }
+  }
+</script>
+</body>
+</html>
